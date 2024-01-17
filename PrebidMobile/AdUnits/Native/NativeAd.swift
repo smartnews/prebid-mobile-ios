@@ -38,7 +38,7 @@ public class NativeAd: NSObject, CacheExpiryDelegate {
     private var impressionHasBeenTracked = false
     private weak var viewForTracking: UIView?
     //Click Handling
-    private var gestureRecognizerRecords = [NativeAdGestureRecognizerRecord]()
+    internal var gestureRecognizerRecords = [NativeAdGestureRecognizerRecord]()
     
     private let eventManager = EventManager()
     
@@ -96,6 +96,9 @@ public class NativeAd: NSObject, CacheExpiryDelegate {
         return dataObjects(of: .ctaText).first?.value
     }
     
+    // Visible for testing.
+    internal var onViewabilityTimerFired: ((String) -> ())?
+
     public static func create(cacheId: String) -> NativeAd? {
         guard let bidString = CacheManager.shared.get(cacheId: cacheId),
               let bidDic = Utils.shared.getDictionaryFromString(bidString) else {
@@ -143,7 +146,7 @@ public class NativeAd: NSObject, CacheExpiryDelegate {
         
         return ad
     }
-    
+
     private override init() {
         super.init()
     }
@@ -218,6 +221,7 @@ public class NativeAd: NSObject, CacheExpiryDelegate {
                 Log.debug("FAILED TO ACQUIRE strongSelf viewabilityTimer")
                 return
             }
+            strongSelf.onViewabilityTimerFired?(timer.debugDescription)
             strongSelf.checkViewability()
         }
     }
@@ -328,7 +332,7 @@ public class NativeAd: NSObject, CacheExpiryDelegate {
     
 }
 
-private class NativeAdGestureRecognizerRecord : NSObject {
+internal class NativeAdGestureRecognizerRecord : NSObject {
     weak var viewWithTracking: UIView?
     weak var gestureRecognizer: UIGestureRecognizer?
     

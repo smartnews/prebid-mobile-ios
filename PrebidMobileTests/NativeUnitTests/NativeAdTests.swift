@@ -53,4 +53,67 @@ class NativeAdTests: XCTestCase {
         XCTAssertEqual(nativeAd?.dataObjects(of: .desc).first?.type, 2)
         XCTAssertEqual(nativeAd?.dataObjects(of: .ctaText).first?.type, 12)
     }
+
+    @MainActor
+    @available(iOS 15, *)
+    func testReusingNativeAdForMultipleViews() async throws {
+        let cacheId = CacheManager.shared.save(content: nativeAdString)
+        let nativeAd = NativeAd.create(cacheId: cacheId!)!
+        var timerHistory = [String]()
+        nativeAd.onViewabilityTimerFired = { timerName in
+            timerHistory.append(timerName)
+        }
+
+        // User scrolls the feed, an ad cell is displayed.
+        var view1: UIView? = UIView()
+        nativeAd.registerView(view: view1!, clickableViews: [])
+
+        // User scrolls down the feed then scrolls up, the same ad is displayed but with different view.
+        view1 = nil
+        var view2: UIView? = UIView()
+        nativeAd.registerView(view: view2!, clickableViews: [])
+
+        // User scrolls down the feed then scrolls up, the same ad is displayed but with different view.
+        view2 = nil
+        let view3 = UIView()
+        nativeAd.registerView(view: view3, clickableViews: [])
+
+        // Let main thread do other stuffs for 1s.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        // timerHistory should only contain timer from view3.
+        XCTAssertEqual(1, Set(timerHistory).count)
+        // gestureRecognizer should only contain recognizer from view3.
+        XCTAssertEqual(1, nativeAd.gestureRecognizerRecords.count)
+    }
+
+    @MainActor
+    @available(iOS 15, *)
+    func testNativeAdCleanUpAfterViewIsReleased() async throws {
+        let cacheId = CacheManager.shared.save(content: nativeAdString)
+        let nativeAd = NativeAd.create(cacheId: cacheId!)!
+        var timerHistory = [String]()
+        nativeAd.onViewabilityTimerFired = { timerName in
+            timerHistory.append(timerName)
+        }
+
+        // User scrolls the feed, an ad cell is displayed.
+        var view1: UIView? = UIView()
+        nativeAd.registerView(view: view1, clickableViews: [])
+
+        // Let main thread do other stuffs for 1s.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        let copiedHistory = timerHistory
+
+        // User scrolls down the feed, ad cell is not visible, the view is released.
+        view1 = nil
+
+        // Let main thread do other stuffs for 1s.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        // timerHistory should not change because the view is nil -> the timer should be stopped.
+        XCTAssertEqual(copiedHistory, timerHistory)
+
+        XCTAssertEqual(0, nativeAd.gestureRecognizerRecords.count)
+    }
 }
